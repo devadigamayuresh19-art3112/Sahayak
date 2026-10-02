@@ -1,0 +1,6 @@
+{
+  "name": "Sahayak",
+  "description": "AI-Powered WhatsApp-Style Natural Language Inventory Assistant for Local Kirana & Retail Shopkeepers",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
