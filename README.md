@@ -30,6 +30,7 @@ Sahayak is a hackathon-ready, full-stack AI-powered inventory assistant created 
    - Click **[Undo]** to test reversing the transaction with full audit trail!
    - View the **Predicted Sales Trend** card computing Ordinary Least Squares (OLS) linear regression on the rolling 7-day sales data with tomorrow's predicted sales volume and stock replenishment recommendations.
    - Navigate to **Low Stock Alerts** to see Maggi & Tata Salt safety buffer warnings with 1-click **[Restock +10]** replenishment.
+   - Go to **Inventory** or **Transactions** and click **[Download CSV]** to export Excel-compatible offline manual ledger sheets complete with UTF-8 BOM encoding for Hindi and Marathi characters.
 
 ---
 

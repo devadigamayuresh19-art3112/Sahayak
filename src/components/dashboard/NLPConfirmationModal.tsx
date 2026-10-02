@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle2, Edit3, Plus, Sparkles, X } from 'lucide-react';
 import { NLPOperation, ParsedIntentItem, ParsedMessage, Product } from '../../types';
 
@@ -25,6 +25,16 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
   );
   const [isEditing, setIsEditing] = useState(parsedMessage.isAmbiguous);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel]);
+
   const handleUpdateItem = (index: number, updates: Partial<ParsedIntentItem>) => {
     setEditableIntents(prev => {
       const copy = [...prev];
@@ -38,41 +48,49 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-xl rounded-3xl glass-panel p-6 sm:p-8 border border-emerald-400/40 shadow-2xl relative bg-[#081f15]">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nlp-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+    >
+      <div className="w-full max-w-xl rounded-2xl bg-white p-6 sm:p-8 border border-[#DCE8E0] shadow-xl relative text-[#173127]">
         {/* Close Button */}
         <button
           onClick={onCancel}
-          className="absolute top-5 right-5 text-emerald-400/60 hover:text-white transition-colors cursor-pointer"
+          aria-label="Close confirmation dialog"
+          className="absolute top-5 right-5 text-[#89988F] hover:text-[#173127] transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Modal Header */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-2xl bg-[#18583d] border border-emerald-400/40 flex items-center justify-center text-emerald-300">
-            <Sparkles className="w-5 h-5 text-[#61b487]" />
+          <div className="w-10 h-10 rounded-xl bg-[#F0F6F2] border border-[#DCE8E0] flex items-center justify-center text-[#18583d]">
+            <Sparkles className="w-5 h-5 text-[#18583d]" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">Review Inventory Update</h3>
-            <p className="text-xs text-emerald-300/80">
-              Language detected: <strong className="text-emerald-200">{parsedMessage.languageDetected}</strong>
+            <h3 id="nlp-modal-title" className="text-lg font-bold text-[#173127] font-heading">
+              Review Inventory Update
+            </h3>
+            <p className="text-xs text-[#607269]">
+              Language detected: <strong className="text-[#18583d] font-semibold">{parsedMessage.languageDetected}</strong>
             </p>
           </div>
         </div>
 
         {/* Raw Input Quote */}
-        <div className="mb-4 p-3 rounded-xl bg-[#05110b] border border-emerald-800/40 text-xs text-emerald-200/90 italic flex items-center justify-between">
+        <div className="mb-4 p-3 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-xs text-[#173127] italic flex items-center justify-between">
           <span>&ldquo;{parsedMessage.rawText}&rdquo;</span>
-          <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400">
+          <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-[#EBF6F0] text-[#18583d] font-bold border border-[#DCE8E0]">
             {(parsedMessage.overallConfidence * 100).toFixed(0)}% Confidence
           </span>
         </div>
 
         {/* Duplicate Warning */}
         {isDuplicate && (
-          <div className="mb-4 p-3 rounded-xl bg-amber-950/60 border border-amber-500/40 text-amber-200 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
               <strong>Duplicate Notice:</strong> You submitted this exact message less than a minute ago. Verify before confirming.
             </span>
@@ -81,14 +99,14 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
 
         {/* Ambiguity Alert */}
         {parsedMessage.isAmbiguous && !isEditing && (
-          <div className="mb-4 p-3 rounded-xl bg-amber-950/40 border border-amber-600/30 text-amber-200 text-xs flex items-center justify-between">
+          <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{parsedMessage.suggestedClarification || "Ambiguous intent detected. Please verify action."}</span>
             </div>
             <button
               onClick={() => setIsEditing(true)}
-              className="px-2 py-1 bg-amber-800/60 rounded text-[11px] font-bold text-white hover:bg-amber-700"
+              className="px-2 py-1 bg-amber-200 rounded text-[11px] font-bold text-amber-900 hover:bg-amber-300 cursor-pointer"
             >
               Edit Now
             </button>
@@ -103,29 +121,29 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
             return (
               <div
                 key={idx}
-                className="p-4 rounded-2xl bg-[#061810] border border-emerald-700/40 space-y-3"
+                className="p-4 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] space-y-3 shadow-2xs"
               >
                 {!isEditing ? (
                   // Read-Only Preview
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-sm">
+                        <span className="font-bold text-[#173127] text-sm">
                           {hasMatchedProduct ? item.matchedProductName : item.productName}
                         </span>
                         {!hasMatchedProduct && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-700/50">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F0F6F2] text-[#18583d] font-semibold border border-[#DCE8E0]">
                             New Product
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-emerald-400/80 mt-0.5">
+                      <p className="text-xs text-[#607269] mt-0.5">
                         Action:{' '}
-                        <strong className={item.operation === 'stock_in' ? 'text-[#61b487]' : 'text-red-400'}>
+                        <strong className={item.operation === 'stock_in' ? 'text-[#18583d]' : 'text-red-600'}>
                           {item.operation === 'stock_in' ? 'Stock In (Add)' : 'Stock Out (Sold)'}
                         </strong>{' '}
                         · Qty:{' '}
-                        <strong className="text-white font-mono">
+                        <strong className="text-[#173127] font-mono">
                           {item.operation === 'stock_in' ? `+${item.quantity}` : `-${item.quantity}`} {item.unit}
                         </strong>
                       </p>
@@ -134,7 +152,7 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsEditing(true)}
-                        className="p-1.5 text-emerald-400 hover:text-white rounded-lg hover:bg-emerald-900/40 cursor-pointer"
+                        className="p-1.5 text-[#607269] hover:text-[#18583d] rounded-lg hover:bg-white cursor-pointer"
                         title="Edit details"
                       >
                         <Edit3 className="w-4 h-4" />
@@ -146,20 +164,20 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] text-emerald-400 mb-1">Product Name</label>
+                        <label className="block text-[11px] text-[#607269] mb-1 font-semibold">Product Name</label>
                         <input
                           type="text"
                           value={item.productName}
                           onChange={(e) => handleUpdateItem(idx, { productName: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-lg bg-[#081f15] border border-emerald-600/40 text-white text-xs focus:outline-none focus:border-emerald-400"
+                          className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DCE8E0] text-[#173127] text-xs focus:outline-none focus:border-[#18583d]"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] text-emerald-400 mb-1">Select Action</label>
+                        <label className="block text-[11px] text-[#607269] mb-1 font-semibold">Select Action</label>
                         <select
                           value={item.operation}
                           onChange={(e) => handleUpdateItem(idx, { operation: e.target.value as NLPOperation })}
-                          className="w-full px-3 py-1.5 rounded-lg bg-[#081f15] border border-emerald-600/40 text-white text-xs focus:outline-none focus:border-emerald-400"
+                          className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DCE8E0] text-[#173127] text-xs focus:outline-none focus:border-[#18583d] cursor-pointer"
                         >
                           <option value="stock_in">Stock In (Maal Aaya / Received)</option>
                           <option value="stock_out">Stock Out (Bik Gaya / Sold)</option>
@@ -170,23 +188,23 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] text-emerald-400 mb-1">Quantity</label>
+                        <label className="block text-[11px] text-[#607269] mb-1 font-semibold">Quantity</label>
                         <input
                           type="number"
                           min="1"
                           value={item.quantity}
                           onChange={(e) => handleUpdateItem(idx, { quantity: parseInt(e.target.value, 10) || 1 })}
-                          className="w-full px-3 py-1.5 rounded-lg bg-[#081f15] border border-emerald-600/40 text-white text-xs focus:outline-none focus:border-emerald-400 font-mono"
+                          className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DCE8E0] text-[#173127] text-xs focus:outline-none focus:border-[#18583d] font-mono"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] text-emerald-400 mb-1">Unit</label>
+                        <label className="block text-[11px] text-[#607269] mb-1 font-semibold">Unit</label>
                         <input
                           type="text"
                           value={item.unit}
                           onChange={(e) => handleUpdateItem(idx, { unit: e.target.value })}
                           placeholder="packets / bottles"
-                          className="w-full px-3 py-1.5 rounded-lg bg-[#081f15] border border-emerald-600/40 text-white text-xs focus:outline-none focus:border-emerald-400"
+                          className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DCE8E0] text-[#173127] text-xs focus:outline-none focus:border-[#18583d]"
                         />
                       </div>
                     </div>
@@ -195,12 +213,12 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
 
                 {/* If new product detected, offer button to add to catalog with category/SKU */}
                 {!hasMatchedProduct && (
-                  <div className="pt-2 border-t border-emerald-900/50 flex items-center justify-between text-xs">
-                    <span className="text-emerald-400/80">New product not found in catalog.</span>
+                  <div className="pt-2 border-t border-[#DCE8E0] flex items-center justify-between text-xs">
+                    <span className="text-[#607269]">New product not found in catalog.</span>
                     <button
                       type="button"
                       onClick={() => onAddNewProductRequested(item.productName, item.quantity, item.operation)}
-                      className="px-2.5 py-1 rounded bg-[#18583d] text-emerald-200 hover:text-white font-medium flex items-center gap-1 cursor-pointer"
+                      className="px-2.5 py-1 rounded bg-[#18583d] text-white hover:bg-[#0d3d29] font-medium flex items-center gap-1 cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
                       <span>Add to Shop Catalog</span>
@@ -213,11 +231,11 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
         </div>
 
         {/* Modal Action Buttons */}
-        <div className="mt-6 pt-4 border-t border-emerald-800/40 flex items-center justify-between gap-3">
+        <div className="mt-6 pt-4 border-t border-[#DCE8E0] flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2.5 rounded-xl border border-emerald-800 text-xs font-semibold text-emerald-300 hover:text-white hover:bg-emerald-950 transition-colors cursor-pointer"
+            className="px-4 py-2.5 rounded-xl border border-[#DCE8E0] text-xs font-semibold text-[#607269] hover:text-[#173127] hover:bg-[#F0F6F2] transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -227,7 +245,7 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="px-4 py-2.5 rounded-xl border border-emerald-600 text-xs font-semibold text-emerald-200 hover:bg-emerald-900 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl border border-[#DCE8E0] text-xs font-semibold text-[#173127] hover:bg-[#F0F6F2] cursor-pointer"
               >
                 Done Editing
               </button>
@@ -235,7 +253,7 @@ export const NLPConfirmationModal: React.FC<NLPConfirmationModalProps> = ({
             <button
               type="button"
               onClick={handleConfirmAll}
-              className="px-6 py-2.5 rounded-xl bg-[#61b487] hover:bg-[#79ce9f] text-[#05110b] font-bold text-xs transition-all shadow-[0_0_20px_rgba(97,180,135,0.4)] flex items-center gap-1.5 cursor-pointer hover:scale-102 active:scale-98"
+              className="px-6 py-2.5 rounded-xl bg-[#18583d] hover:bg-[#0d3d29] text-white font-bold text-xs transition-all shadow-sm flex items-center gap-1.5 cursor-pointer hover:scale-102 active:scale-98"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Confirm &amp; Update Inventory</span>

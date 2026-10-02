@@ -38,8 +38,8 @@ export const ThreeHeroScene: React.FC<ThreeHeroSceneProps> = ({ onLetGo }) => {
 
     // Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x05110b);
-    scene.fog = new THREE.FogExp2(0x05110b, 0.045);
+    scene.background = new THREE.Color(0xF7FAF8);
+    scene.fog = new THREE.FogExp2(0xF7FAF8, 0.04);
 
     const camera = new THREE.PerspectiveCamera(48, width / height, 0.1, 100);
     camera.position.set(0, 0, 9);
@@ -48,14 +48,14 @@ export const ThreeHeroScene: React.FC<ThreeHeroSceneProps> = ({ onLetGo }) => {
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
     // Studio Lighting setup
-    const ambientLight = new THREE.AmbientLight(0x0d3d29, 2.0);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.8);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0x61b487, 3.5);
+    const keyLight = new THREE.DirectionalLight(0x18583d, 2.5);
     keyLight.position.set(5, 6, 7);
     scene.add(keyLight);
 
@@ -286,23 +286,23 @@ export const ThreeHeroScene: React.FC<ThreeHeroSceneProps> = ({ onLetGo }) => {
   }, [reducedMotion]);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#05110b] flex flex-col items-center justify-center">
+    <div className="relative w-screen h-screen overflow-hidden bg-[#F7FAF8] flex flex-col items-center justify-center">
       {/* 3D Canvas Mount Point */}
       <div ref={mountRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-      {/* Atmospheric Radial Gradient */}
+      {/* Atmospheric Subtle Soft Radial Gradient */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(circle at 50% 50%, rgba(24, 88, 61, 0.22) 0%, rgba(5, 17, 11, 0.85) 75%, #05110b 100%)',
+          background: 'radial-gradient(circle at 50% 50%, rgba(97, 180, 135, 0.12) 0%, rgba(247, 250, 248, 0.8) 75%, #F7FAF8 100%)',
         }}
       />
 
-      {/* Subtle Glowing Grid Overlay */}
+      {/* Subtle Grid Overlay */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-20"
+        className="absolute inset-0 pointer-events-none opacity-40"
         style={{
-          backgroundImage: 'linear-gradient(rgba(97, 180, 135, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(97, 180, 135, 0.12) 1px, transparent 1px)',
+          backgroundImage: 'linear-gradient(rgba(220, 232, 224, 0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(220, 232, 224, 0.6) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
         }}
       />
@@ -310,26 +310,26 @@ export const ThreeHeroScene: React.FC<ThreeHeroSceneProps> = ({ onLetGo }) => {
       {/* Fallback for WebGL missing */}
       {!webGlSupported && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-48 h-48 rounded-3xl bg-emerald-900/30 border border-emerald-500/20 glow-green animate-pulse" />
+          <div className="w-48 h-48 rounded-3xl bg-white border border-[#DCE8E0] shadow-sm animate-pulse" />
         </div>
       )}
 
-      {/* Minimal Brand & Primary Action (Strict Page 1 Specification) */}
+      {/* Minimal Brand & Primary Action */}
       <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-xl">
         {/* Brand Display Wordmark */}
-        <h1 className="text-6xl sm:text-7xl md:text-8xl font-extrabold tracking-tight text-white mb-3">
+        <h1 className="text-6xl sm:text-7xl md:text-8xl font-extrabold tracking-tight text-[#173127] mb-3 font-heading">
           Sahayak
         </h1>
 
         {/* Small supporting line */}
-        <p className="text-base sm:text-lg text-emerald-200/80 font-medium mb-10 max-w-md tracking-wide">
-          Speak. Send. Sahayak Handles the Rest.
+        <p className="text-base sm:text-lg text-[#607269] font-medium mb-10 max-w-md tracking-wide">
+          Your shop. Your stock. Simplified.
         </p>
 
         {/* ONE Primary Button: LET'S GO */}
         <button
           onClick={onLetGo}
-          className="group relative inline-flex items-center justify-center px-10 py-4 text-base font-semibold text-[#05110b] bg-[#61b487] rounded-full transition-all duration-300 hover:bg-[#7ed0a4] hover:scale-105 active:scale-95 shadow-[0_0_35px_rgba(97,180,135,0.45)] cursor-pointer"
+          className="group relative inline-flex items-center justify-center px-10 py-4 text-base font-semibold text-white bg-[#18583d] rounded-full transition-all duration-300 hover:bg-[#0d3d29] hover:scale-105 active:scale-95 shadow-md cursor-pointer focus-ring"
         >
           <span className="tracking-wider">LET&apos;S GO</span>
           <svg
@@ -345,8 +345,8 @@ export const ThreeHeroScene: React.FC<ThreeHeroSceneProps> = ({ onLetGo }) => {
       </div>
 
       {/* Minimal Ambient Status Dot */}
-      <div className="absolute bottom-6 flex items-center gap-2 text-xs text-emerald-500/60 font-mono tracking-widest">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#61b487] animate-ping" />
+      <div className="absolute bottom-6 flex items-center gap-2 text-xs text-[#89988F] font-mono tracking-widest">
+        <span className="w-2 h-2 rounded-full bg-[#18583d] animate-ping" />
         <span>AI INVENTORY PROTOCOL ACTIVE</span>
       </div>
     </div>

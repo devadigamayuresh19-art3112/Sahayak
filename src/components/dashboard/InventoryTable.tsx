@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   AlertTriangle,
   Edit2,
@@ -8,33 +8,43 @@ import {
   Trash2,
   X,
   PackagePlus,
-  CheckCircle2,
-  Filter
+  FileSpreadsheet,
+  Package,
+  Layers,
+  IndianRupee,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { Product } from '../../types';
+import { exportProductsToCSV } from '../../utils/csvExport';
 
 interface InventoryTableProps {
   products: Product[];
+  shopName?: string;
   onAddProduct: (prod: Omit<Product, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => void;
   onUpdateProduct: (id: string, updates: Partial<Product>) => void;
   onDeleteProduct: (id: string) => void;
   onQuickAdjust: (id: string, delta: number) => void;
   prefillNewProduct?: { name: string; quantity: number } | null;
   onClearPrefill?: () => void;
+  onExportSuccess?: (filename: string) => void;
 }
 
 export const InventoryTable: React.FC<InventoryTableProps> = ({
   products,
+  shopName = 'Sharma Kirana',
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
   onQuickAdjust,
   prefillNewProduct,
   onClearPrefill,
+  onExportSuccess,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK'>('ALL');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
   // Add / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,7 +61,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   const [sellingPrice, setSellingPrice] = useState(0);
 
   // Open modal for prefilled new product if triggered by NLP
-  React.useEffect(() => {
+  useEffect(() => {
     if (prefillNewProduct) {
       setEditingProduct(null);
       setName(prefillNewProduct.name);
@@ -62,7 +72,32 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
     }
   }, [prefillNewProduct, onClearPrefill]);
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isModalOpen) {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModalOpen]);
+
   const categories = ['ALL', ...Array.from(new Set(products.map(p => p.category)))];
+
+  // Inventory KPI Metrics
+  const summaryMetrics = useMemo(() => {
+    const totalUnits = products.reduce((acc, p) => acc + p.quantity, 0);
+    const totalValue = products.reduce((acc, p) => acc + (p.selling_price || 0) * p.quantity, 0);
+    const lowStockItems = products.filter(p => p.quantity <= p.minimum_stock);
+
+    return {
+      totalUnits,
+      totalValue,
+      lowStockCount: lowStockItems.length,
+      itemCount: products.length,
+    };
+  }, [products]);
 
   const handleOpenAdd = () => {
     setEditingProduct(null);
@@ -122,50 +157,124 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   };
 
   // Filtered Products
-  const filteredProducts = products.filter(p => {
-    const matchesSearch =
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesSearch =
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.category.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesCategory = categoryFilter === 'ALL' || p.category === categoryFilter;
+      const matchesCategory = categoryFilter === 'ALL' || p.category === categoryFilter;
 
-    let matchesStatus = true;
-    if (statusFilter === 'OUT_OF_STOCK') matchesStatus = p.quantity === 0;
-    else if (statusFilter === 'LOW_STOCK') matchesStatus = p.quantity > 0 && p.quantity <= p.minimum_stock;
-    else if (statusFilter === 'IN_STOCK') matchesStatus = p.quantity > p.minimum_stock;
+      let matchesStatus = true;
+      if (statusFilter === 'OUT_OF_STOCK') matchesStatus = p.quantity === 0;
+      else if (statusFilter === 'LOW_STOCK') matchesStatus = p.quantity > 0 && p.quantity <= p.minimum_stock;
+      else if (statusFilter === 'IN_STOCK') matchesStatus = p.quantity > p.minimum_stock;
 
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [products, searchTerm, categoryFilter, statusFilter]);
+
+  // Handle CSV Download
+  const handleDownloadCSV = () => {
+    const filename = exportProductsToCSV(filteredProducts, shopName);
+    if (onExportSuccess) {
+      onExportSuccess(filename);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Top Controls Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 1. Quick KPI Summary Header Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        {/* Total Products */}
+        <div className="rounded-2xl bg-white p-4 border border-[#DCE8E0] shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-[#607269] font-medium">
+            <span>Total SKUs</span>
+            <Package className="w-4 h-4 text-[#18583d]" />
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-[#173127] font-mono">
+            {summaryMetrics.itemCount}
+          </div>
+          <span className="text-[11px] text-[#89988F] font-mono">Active catalog lines</span>
+        </div>
+
+        {/* Total Units */}
+        <div className="rounded-2xl bg-white p-4 border border-[#DCE8E0] shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-[#607269] font-medium">
+            <span>Total Units</span>
+            <Layers className="w-4 h-4 text-[#18583d]" />
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-[#173127] font-mono">
+            {summaryMetrics.totalUnits}
+          </div>
+          <span className="text-[11px] text-[#89988F] font-mono">Physical inventory</span>
+        </div>
+
+        {/* Total Value */}
+        <div className="rounded-2xl bg-white p-4 border border-[#DCE8E0] shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-[#607269] font-medium">
+            <span>Stock Retail Value</span>
+            <IndianRupee className="w-4 h-4 text-[#18583d]" />
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-[#18583d] font-mono">
+            ₹{summaryMetrics.totalValue.toLocaleString('en-IN')}
+          </div>
+          <span className="text-[11px] text-[#89988F] font-mono">Estimated shop value</span>
+        </div>
+
+        {/* Low Stock Alert Counter */}
+        <div
+          onClick={() => setStatusFilter(statusFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')}
+          className={`rounded-2xl bg-white p-4 border transition-all cursor-pointer flex flex-col justify-between shadow-sm ${statusFilter === 'LOW_STOCK' ? 'border-amber-400 bg-amber-50/50 ring-2 ring-amber-400/40' : 'border-[#DCE8E0] hover:border-amber-400'}`}
+        >
+          <div className="flex items-center justify-between text-xs text-amber-700 font-medium">
+            <span>Low Stock Attention</span>
+            <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse" />
+          </div>
+          <div className="mt-2 text-2xl sm:text-3xl font-extrabold text-amber-600 font-mono">
+            {summaryMetrics.lowStockCount}
+          </div>
+          <span className="text-[11px] text-amber-700 font-mono">
+            {statusFilter === 'LOW_STOCK' ? 'Click to show all' : 'Click to filter low stock'}
+          </span>
+        </div>
+      </div>
+
+      {/* 2. Controls & Actions Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Search */}
         <div className="relative flex-1 max-w-md">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-emerald-500/60">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#89988F]">
             <Search className="w-4 h-4" />
           </div>
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search product, category, or SKU..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#061810] border border-emerald-700/40 text-white placeholder-emerald-700/60 text-xs focus:outline-none focus:border-emerald-400"
+            placeholder="Search by product name, SKU, or category..."
+            className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white border border-[#DCE8E0] text-[#173127] placeholder-[#89988F] text-xs focus:outline-none focus:border-[#18583d] focus:ring-1 focus:ring-[#18583d]/20 transition-all shadow-2xs"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#89988F] hover:text-[#173127]"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
-        {/* Filters and Add Button */}
+        {/* Filters & Export / Add Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Category Filter */}
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-emerald-200 text-xs focus:outline-none focus:border-emerald-400 cursor-pointer"
+            className="px-3 py-2.5 rounded-xl bg-white border border-[#DCE8E0] text-[#173127] text-xs focus:outline-none focus:border-[#18583d] cursor-pointer shadow-2xs"
           >
             {categories.map((c) => (
-              <option key={c} value={c} className="bg-[#081a13] text-white">
+              <option key={c} value={c} className="bg-white text-[#173127]">
                 {c === 'ALL' ? 'All Categories' : c}
               </option>
             ))}
@@ -175,18 +284,52 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-emerald-200 text-xs focus:outline-none focus:border-emerald-400 cursor-pointer"
+            className="px-3 py-2.5 rounded-xl bg-white border border-[#DCE8E0] text-[#173127] text-xs focus:outline-none focus:border-[#18583d] cursor-pointer shadow-2xs"
           >
-            <option value="ALL" className="bg-[#081a13] text-white">All Statuses</option>
-            <option value="IN_STOCK" className="bg-[#081a13] text-white">In Stock</option>
-            <option value="LOW_STOCK" className="bg-[#081a13] text-white">Low Stock Warning</option>
-            <option value="OUT_OF_STOCK" className="bg-[#081a13] text-white">Out of Stock</option>
+            <option value="ALL">All Stock Statuses</option>
+            <option value="IN_STOCK">In Stock Only</option>
+            <option value="LOW_STOCK">Low Stock Warning</option>
+            <option value="OUT_OF_STOCK">Out of Stock</option>
           </select>
+
+          {/* View Toggle */}
+          <div className="hidden sm:flex items-center rounded-xl bg-[#F0F6F2] border border-[#DCE8E0] p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              aria-label="Table view"
+              title="Table view"
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${viewMode === 'table' ? 'bg-[#18583d] text-white shadow-xs' : 'text-[#607269] hover:text-[#173127]'}`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              aria-label="Card grid view"
+              title="Card grid view"
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${viewMode === 'cards' ? 'bg-[#18583d] text-white shadow-xs' : 'text-[#607269] hover:text-[#173127]'}`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Download CSV Button */}
+          <button
+            onClick={handleDownloadCSV}
+            aria-label="Download inventory record as CSV"
+            title="Download inventory record as Excel/Google Sheets compatible CSV"
+            className="px-4 py-2.5 rounded-xl bg-white hover:bg-[#F0F6F2] border border-[#DCE8E0] hover:border-[#18583d] text-[#173127] text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-2xs hover:scale-102 active:scale-98"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-[#18583d]" />
+            <span>Download CSV</span>
+          </button>
 
           {/* Add Product Button */}
           <button
             onClick={handleOpenAdd}
-            className="px-4 py-2 rounded-xl bg-[#61b487] hover:bg-[#79ce9f] text-[#05110b] font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md hover:scale-102"
+            aria-label="Add new inventory product"
+            className="px-4 py-2.5 rounded-xl bg-[#18583d] hover:bg-[#0d3d29] text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-102 active:scale-98"
           >
             <PackagePlus className="w-4 h-4" />
             <span>Add Product</span>
@@ -194,139 +337,312 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
         </div>
       </div>
 
-      {/* Table Surface */}
-      <div className="rounded-3xl glass-panel border border-emerald-500/25 overflow-hidden shadow-2xl">
+      {/* 3. Products View Container */}
+      <div className="rounded-2xl bg-white border border-[#DCE8E0] overflow-hidden shadow-sm">
         {filteredProducts.length === 0 ? (
-          <div className="py-16 text-center text-emerald-300/70">
-            <PackagePlus className="w-10 h-10 mx-auto mb-3 text-emerald-500/50" />
-            <p className="text-sm font-semibold">No products found matching filters.</p>
-            <p className="text-xs text-emerald-400/60 mt-1">Try resetting search or adding a new inventory item.</p>
+          <div className="py-20 text-center text-[#607269] space-y-3">
+            <Package className="w-12 h-12 mx-auto text-[#DCE8E0]" />
+            <div>
+              <p className="text-sm font-semibold text-[#173127]">No products found matching your search</p>
+              <p className="text-xs text-[#607269] mt-1 max-w-sm mx-auto">
+                Try clearing search filters, or click &quot;Add Product&quot; to register new stock items.
+              </p>
+            </div>
+            <button
+              onClick={() => { setSearchTerm(''); setCategoryFilter('ALL'); setStatusFilter('ALL'); }}
+              className="px-4 py-1.5 rounded-lg bg-[#F0F6F2] border border-[#DCE8E0] text-[#173127] text-xs hover:border-[#18583d]"
+            >
+              Reset Filters
+            </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#081f15] border-b border-emerald-800/40 text-emerald-400 font-semibold uppercase tracking-wider">
-                <tr>
-                  <th className="py-3.5 px-4">Product</th>
-                  <th className="py-3.5 px-4">Category</th>
-                  <th className="py-3.5 px-4 font-mono">SKU</th>
-                  <th className="py-3.5 px-4 text-right">Current Stock</th>
-                  <th className="py-3.5 px-4 text-right">Min Buffer</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-emerald-900/30">
-                {filteredProducts.map((p) => {
-                  const isOutOfStock = p.quantity === 0;
-                  const isLowStock = !isOutOfStock && p.quantity <= p.minimum_stock;
+          <div>
+            {/* Context Subheader Bar */}
+            <div className="px-5 py-2.5 bg-[#F7FAF8] border-b border-[#DCE8E0] flex items-center justify-between text-xs text-[#607269] font-mono">
+              <span>
+                Showing {filteredProducts.length} of {products.length} catalog items
+              </span>
+              <span className="hidden sm:inline">
+                Tap + / - to make instant sales &amp; restock adjustments
+              </span>
+            </div>
 
-                  return (
-                    <tr
-                      key={p.id}
-                      className="hover:bg-emerald-950/40 transition-colors"
-                    >
-                      <td className="py-3 px-4 font-medium text-white">
-                        <div className="font-semibold text-sm">{p.name}</div>
-                        <div className="text-[11px] text-emerald-500 font-mono">
-                          MRP ₹{p.selling_price || '--'} · Cost ₹{p.cost_price || '--'}
+            {/* Desktop Table View (active when viewMode === 'table') */}
+            {viewMode === 'table' && (
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F0F6F2] border-b border-[#DCE8E0] text-[#173127] font-semibold uppercase tracking-wider">
+                    <tr>
+                      <th className="py-3.5 px-4">Product Details</th>
+                      <th className="py-3.5 px-4">Category</th>
+                      <th className="py-3.5 px-4 font-mono">SKU</th>
+                      <th className="py-3.5 px-4 text-right">In Stock</th>
+                      <th className="py-3.5 px-4 text-right">Min Buffer</th>
+                      <th className="py-3.5 px-4 text-right">Price / Value</th>
+                      <th className="py-3.5 px-4 text-center">Status</th>
+                      <th className="py-3.5 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#DCE8E0]">
+                    {filteredProducts.map((p) => {
+                      const isOutOfStock = p.quantity === 0;
+                      const isLowStock = !isOutOfStock && p.quantity <= p.minimum_stock;
+                      const totalLineVal = (p.selling_price || 0) * p.quantity;
+
+                      return (
+                        <tr
+                          key={p.id}
+                          className="hover:bg-[#F7FAF8] transition-colors group"
+                        >
+                          {/* Product Name */}
+                          <td className="py-3.5 px-4 font-medium text-[#173127]">
+                            <div className="font-semibold text-sm text-[#173127] group-hover:text-[#18583d] transition-colors">
+                              {p.name}
+                            </div>
+                            <div className="text-[11px] text-[#607269] font-mono flex items-center gap-1.5 mt-0.5">
+                              <span>Cost: ₹{p.cost_price || 0}</span>
+                              <span aria-hidden="true">·</span>
+                              <span>Selling: ₹{p.selling_price || 0}</span>
+                            </div>
+                          </td>
+
+                          {/* Category */}
+                          <td className="py-3.5 px-4 text-[#607269]">
+                            {p.category}
+                          </td>
+
+                          {/* SKU */}
+                          <td className="py-3.5 px-4 font-mono text-[11px] text-[#607269]">
+                            {p.sku}
+                          </td>
+
+                          {/* Current Stock */}
+                          <td className="py-3.5 px-4 text-right font-mono font-bold text-sm text-[#173127]">
+                            <span className={isOutOfStock ? 'text-red-600' : isLowStock ? 'text-amber-600' : 'text-[#18583d]'}>
+                              {p.quantity}
+                            </span>{' '}
+                            <span className="text-[11px] font-normal text-[#607269]">{p.unit}</span>
+                          </td>
+
+                          {/* Minimum Stock */}
+                          <td className="py-3.5 px-4 text-right font-mono text-xs text-[#607269]">
+                            {p.minimum_stock} {p.unit}
+                          </td>
+
+                          {/* Price / Line Value */}
+                          <td className="py-3.5 px-4 text-right font-mono text-xs">
+                            <div className="font-semibold text-[#173127]">₹{p.selling_price || 0}</div>
+                            <div className="text-[11px] text-[#607269]">Tot: ₹{totalLineVal.toLocaleString('en-IN')}</div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3.5 px-4 text-center">
+                            {isOutOfStock ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded-full">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
+                                Out of Stock
+                              </span>
+                            ) : isLowStock ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                Low Stock
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#18583d] bg-[#EBF6F0] border border-[#DCE8E0] px-2.5 py-0.5 rounded-full">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#18583d]" />
+                                In Stock
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Action Buttons */}
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Quick Sell (-1) */}
+                              <button
+                                onClick={() => onQuickAdjust(p.id, -1)}
+                                aria-label={`Sell 1 unit of ${p.name}`}
+                                title="Sell 1 unit"
+                                disabled={p.quantity <= 0}
+                                className="p-1.5 rounded-lg bg-[#F0F6F2] border border-[#DCE8E0] text-[#173127] hover:bg-[#18583d] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Quick Add (+1) */}
+                              <button
+                                onClick={() => onQuickAdjust(p.id, 1)}
+                                aria-label={`Restock 1 unit of ${p.name}`}
+                                title="Add 1 unit"
+                                className="p-1.5 rounded-lg bg-[#F0F6F2] border border-[#DCE8E0] text-[#173127] hover:bg-[#18583d] hover:text-white transition-colors cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Edit */}
+                              <button
+                                onClick={() => handleOpenEdit(p)}
+                                aria-label={`Edit ${p.name}`}
+                                title="Edit product"
+                                className="p-1.5 rounded-lg text-[#607269] hover:text-[#18583d] hover:bg-[#F0F6F2] transition-colors cursor-pointer"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Delete */}
+                              <button
+                                onClick={() => onDeleteProduct(p.id)}
+                                aria-label={`Delete ${p.name}`}
+                                title="Delete product"
+                                className="p-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Mobile Cards (active on mobile < 768px, or when viewMode === 'cards' on any screen) */}
+            <div className={`${viewMode === 'cards' ? 'block' : 'block md:hidden'} p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4`}>
+              {filteredProducts.map((p) => {
+                const isOutOfStock = p.quantity === 0;
+                const isLowStock = !isOutOfStock && p.quantity <= p.minimum_stock;
+                const totalLineVal = (p.selling_price || 0) * p.quantity;
+
+                return (
+                  <div
+                    key={p.id}
+                    className="p-4 rounded-xl bg-white border border-[#DCE8E0] flex flex-col justify-between space-y-3 hover:border-[#18583d] transition-all shadow-2xs"
+                  >
+                    {/* Header: Title + Category + Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-bold text-[#173127] text-sm">{p.name}</h4>
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-[#607269] font-mono">
+                          <span>{p.category}</span>
+                          <span>·</span>
+                          <span>{p.sku}</span>
                         </div>
-                      </td>
-                      <td className="py-3 px-4 text-emerald-200/80">{p.category}</td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-emerald-400/80">{p.sku}</td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-sm text-white">
-                        <span className={isLowStock || isOutOfStock ? 'text-amber-400' : 'text-emerald-300'}>
-                          {p.quantity}
-                        </span>{' '}
-                        <span className="text-[11px] font-normal text-emerald-400/80">{p.unit}</span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-xs text-emerald-400/70">
-                        {p.minimum_stock} {p.unit}
-                      </td>
-                      <td className="py-3 px-4 text-center">
+                      </div>
+                      <div>
                         {isOutOfStock ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-400 bg-red-950/80 border border-red-500/40 px-2 py-0.5 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
                             Out of Stock
                           </span>
                         ) : isLowStock ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 bg-amber-950/80 border border-amber-500/40 px-2 py-0.5 rounded-full">
-                            <AlertTriangle className="w-3 h-3 text-amber-400" />
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                             Low Stock
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#EBF6F0] text-[#18583d] border border-[#DCE8E0]">
                             In Stock
                           </span>
                         )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* Quick decrement (-1) */}
-                          <button
-                            onClick={() => onQuickAdjust(p.id, -1)}
-                            title="Quick Sell (-1)"
-                            className="p-1 rounded-lg bg-emerald-950 border border-emerald-800 text-emerald-300 hover:text-white hover:border-emerald-600 transition-colors cursor-pointer"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          {/* Quick increment (+1) */}
-                          <button
-                            onClick={() => onQuickAdjust(p.id, 1)}
-                            title="Quick Add (+1)"
-                            className="p-1 rounded-lg bg-emerald-950 border border-emerald-800 text-emerald-300 hover:text-white hover:border-emerald-600 transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                          {/* Edit button */}
-                          <button
-                            onClick={() => handleOpenEdit(p)}
-                            title="Edit Product"
-                            className="p-1 rounded-lg text-emerald-400 hover:text-white hover:bg-emerald-900/50 transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          {/* Delete button */}
-                          <button
-                            onClick={() => onDeleteProduct(p.id)}
-                            title="Delete Product"
-                            className="p-1 rounded-lg text-red-400 hover:text-red-200 hover:bg-red-950/50 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                      </div>
+                    </div>
+
+                    {/* Stock Numbers & Pricing Row */}
+                    <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-xs">
+                      <div>
+                        <span className="text-[10px] text-[#607269] block">Current Stock</span>
+                        <div className="text-lg font-extrabold font-mono text-[#173127]">
+                          <span className={isOutOfStock ? 'text-red-600' : isLowStock ? 'text-amber-600' : 'text-[#18583d]'}>
+                            {p.quantity}
+                          </span>{' '}
+                          <span className="text-xs font-normal text-[#607269]">{p.unit}</span>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <span className="text-[10px] text-[#89988F] font-mono">Min buffer: {p.minimum_stock}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-[#607269] block">Selling Price</span>
+                        <div className="text-lg font-extrabold font-mono text-[#173127]">
+                          ₹{p.selling_price || 0}
+                        </div>
+                        <span className="text-[10px] text-[#89988F] font-mono">Total: ₹{totalLineVal.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+
+                    {/* Quick Adjust & Actions */}
+                    <div className="pt-2 border-t border-[#DCE8E0] flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => onQuickAdjust(p.id, -1)}
+                          disabled={p.quantity <= 0}
+                          aria-label={`Sell 1 unit of ${p.name}`}
+                          className="px-3 py-1.5 rounded-lg bg-[#F0F6F2] hover:bg-[#18583d] hover:text-white border border-[#DCE8E0] text-[#173127] font-bold text-xs flex items-center gap-1 disabled:opacity-30 cursor-pointer transition-colors"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                          <span>Sell</span>
+                        </button>
+                        <button
+                          onClick={() => onQuickAdjust(p.id, 1)}
+                          aria-label={`Restock 1 unit of ${p.name}`}
+                          className="px-3 py-1.5 rounded-lg bg-[#F0F6F2] hover:bg-[#18583d] hover:text-white border border-[#DCE8E0] text-[#173127] font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleOpenEdit(p)}
+                          aria-label={`Edit ${p.name}`}
+                          className="p-2 rounded-lg text-[#607269] hover:text-[#18583d] hover:bg-[#F0F6F2] cursor-pointer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteProduct(p.id)}
+                          aria-label={`Delete ${p.name}`}
+                          className="p-2 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Add / Edit Product Modal */}
+      {/* 4. Add / Edit Product Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-lg rounded-3xl glass-panel p-6 sm:p-8 border border-emerald-500/40 shadow-2xl relative bg-[#081f15]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="product-modal-title"
+          aria-describedby="product-modal-desc"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 sm:p-8 border border-[#DCE8E0] shadow-xl relative text-[#173127]">
             <button
               onClick={() => setIsModalOpen(false)}
-              className="absolute top-5 right-5 text-emerald-400/60 hover:text-white transition-colors cursor-pointer"
+              aria-label="Close product modal"
+              className="absolute top-5 right-5 text-[#89988F] hover:text-[#173127] transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-lg font-bold text-white mb-1">
+            <h3 id="product-modal-title" className="text-lg font-bold text-[#173127] mb-1 font-heading">
               {editingProduct ? 'Edit Product Details' : 'Add New Inventory Product'}
             </h3>
-            <p className="text-xs text-emerald-300/80 mb-5">
+            <p id="product-modal-desc" className="text-xs text-[#607269] mb-5">
               Fill in the stock metadata. Sahayak will track this item in natural language messages.
             </p>
 
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-emerald-300 mb-1">
+                <label className="block text-xs font-semibold text-[#173127] mb-1">
                   Product Name
                 </label>
                 <input
@@ -335,19 +651,19 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Maggi 2-Minute Noodles 70g"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#061810] border border-emerald-700/40 text-white placeholder-emerald-700/60 text-xs focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127] placeholder-[#89988F] text-xs focus:outline-none focus:border-[#18583d] focus:bg-white"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-300 mb-1">
+                  <label className="block text-xs font-semibold text-[#173127] mb-1">
                     Category
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-white text-xs focus:outline-none focus:border-emerald-400 cursor-pointer"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127] text-xs focus:outline-none focus:border-[#18583d] cursor-pointer focus:bg-white"
                   >
                     <option value="Packaged Food">Packaged Food</option>
                     <option value="Biscuits & Snacks">Biscuits &amp; Snacks</option>
@@ -360,7 +676,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-300 mb-1">
+                  <label className="block text-xs font-semibold text-[#173127] mb-1">
                     SKU Code
                   </label>
                   <input
@@ -368,14 +684,14 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
                     placeholder="e.g. MAG-70G"
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127] font-mono text-xs focus:outline-none focus:border-[#18583d] focus:bg-white"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-300 mb-1">
+                  <label className="block text-xs font-semibold text-[#173127] mb-1">
                     Initial Stock
                   </label>
                   <input
@@ -383,12 +699,12 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     min="0"
                     value={quantity}
                     onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 0)}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127] font-mono text-xs focus:outline-none focus:border-[#18583d] focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-300 mb-1">
+                  <label className="block text-xs font-semibold text-[#173127] mb-1">
                     Min Stock Buffer
                   </label>
                   <input
@@ -396,18 +712,18 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     min="1"
                     value={minimumStock}
                     onChange={(e) => setMinimumStock(parseInt(e.target.value, 10) || 1)}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127] font-mono text-xs focus:outline-none focus:border-[#18583d] focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-300 mb-1">
+                  <label className="block text-xs font-semibold text-[#173127] mb-1">
                     Unit
                   </label>
                   <select
                     value={unit}
                     onChange={(e) => setUnit(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-white text-xs focus:outline-none focus:border-emerald-400 cursor-pointer"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127] text-xs focus:outline-none focus:border-[#18583d] cursor-pointer focus:bg-white"
                   >
                     <option value="packets">packets</option>
                     <option value="bottles">bottles</option>
@@ -422,7 +738,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-300 mb-1">
+                  <label className="block text-xs font-semibold text-[#173127] mb-1">
                     Cost Price (₹)
                   </label>
                   <input
@@ -430,12 +746,12 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     step="0.5"
                     value={costPrice}
                     onChange={(e) => setCostPrice(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127] font-mono text-xs focus:outline-none focus:border-[#18583d] focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-emerald-300 mb-1">
+                  <label className="block text-xs font-semibold text-[#173127] mb-1">
                     Selling Price / MRP (₹)
                   </label>
                   <input
@@ -443,22 +759,22 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                     step="0.5"
                     value={sellingPrice}
                     onChange={(e) => setSellingPrice(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-700/40 text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127] font-mono text-xs focus:outline-none focus:border-[#18583d] focus:bg-white"
                   />
                 </div>
               </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-emerald-800/40">
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-[#DCE8E0]">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-emerald-800 text-xs font-medium text-emerald-300 hover:bg-emerald-950"
+                  className="px-4 py-2 rounded-xl border border-[#DCE8E0] text-xs font-medium text-[#607269] hover:bg-[#F0F6F2] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#61b487] hover:bg-[#78cca0] text-[#05110b] font-bold text-xs shadow-md"
+                  className="px-5 py-2 rounded-xl bg-[#18583d] hover:bg-[#0d3d29] text-white font-bold text-xs shadow-sm cursor-pointer"
                 >
                   {editingProduct ? 'Save Changes' : 'Create Product'}
                 </button>

@@ -1,80 +1,99 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  AlertTriangle,
-  BarChart3,
-  CheckCircle2,
-  Database,
-  Globe,
-  History,
-  LayoutDashboard,
-  LogOut,
-  Package,
-  Plus,
   RotateCcw,
-  Settings,
   Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  History,
   Store,
+  Globe,
   User,
-  Volume2,
+  LogOut,
+  LayoutDashboard,
+  Package,
+  BarChart3,
+  Settings,
+  Database,
   Menu,
   X,
   Download
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { authService } from '../services/auth';
 import { dbService } from '../services/db';
 import { parseInventoryMessage } from '../services/nlpEngine';
-import { Alert, InventoryTransaction, NLPOperation, ParsedIntentItem, ParsedMessage, Product, ShopStats, UserProfile } from '../types';
+import {
+  Alert,
+  InventoryTransaction,
+  MessageRecord,
+  ParsedIntentItem,
+  ParsedMessage,
+  Product,
+  ShopStats,
+  UserProfile,
+} from '../types';
 import { AIInputSection } from '../components/dashboard/AIInputSection';
-import { NLPConfirmationModal } from '../components/dashboard/NLPConfirmationModal';
 import { InventoryTable } from '../components/dashboard/InventoryTable';
 import { TransactionsList } from '../components/dashboard/TransactionsList';
 import { AlertsPanel } from '../components/dashboard/AlertsPanel';
 import { AnalyticsOverview } from '../components/dashboard/AnalyticsOverview';
 import { PredictedSalesTrendCard } from '../components/dashboard/PredictedSalesTrendCard';
+import { AssistantTabContent } from '../components/dashboard/AssistantTabContent';
+import { NLPConfirmationModal } from '../components/dashboard/NLPConfirmationModal';
+import { SahayakLogo } from '../components/common/SahayakLogo';
 
 interface DashboardPageProps {
   user: UserProfile;
-  onNavigate: (route: string) => void;
   onLogout: () => void;
+  onNavigate: (route: string) => void;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'transactions' | 'assistant' | 'alerts' | 'analytics' | 'settings'>('overview');
+export const DashboardPage: React.FC<DashboardPageProps> = ({
+  user,
+  onLogout,
+  onNavigate,
+}) => {
+  // Navigation active tab
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'inventory' | 'transactions' | 'assistant' | 'alerts' | 'analytics' | 'settings'
+  >('overview');
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Store data state
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [stats, setStats] = useState<ShopStats>({
     totalProducts: 0,
+    totalStockUnits: 0,
     stockAddedToday: 0,
     stockSoldToday: 0,
     lowStockCount: 0,
-    totalStockUnits: 0,
   });
-  const [dailySummary, setDailySummary] = useState('');
+  const [dailySummary, setDailySummary] = useState<string>('');
 
-  // Active NLP Confirmation Modal State
+  // NLP Modal & Feedback state
   const [pendingParsedMessage, setPendingParsedMessage] = useState<ParsedMessage | null>(null);
   const [isDuplicateWarning, setIsDuplicateWarning] = useState(false);
   const [prefillNewProduct, setPrefillNewProduct] = useState<{ name: string; quantity: number } | null>(null);
 
-  // Undo Toast Banner State
+  // Undo and toast feedback
   const [toastNotification, setToastNotification] = useState<{ message: string; canUndo?: boolean } | null>(null);
 
-  // Refresh all database state for active user
+  // Load and refresh store data
   const refreshData = useCallback(() => {
     const prods = dbService.getProducts(user.user_id);
     const txs = dbService.getTransactions(user.user_id);
     const alrts = dbService.getAlerts(user.user_id);
+    const msgs = dbService.getMessages(user.user_id);
     const st = dbService.getStats(user.user_id);
     const sum = dbService.getDailySummary(user.user_id);
 
     setProducts(prods);
     setTransactions(txs);
     setAlerts(alrts);
+    setMessages(msgs);
     setStats(st);
     setDailySummary(sum);
   }, [user.user_id]);
@@ -140,7 +159,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
           newProd.id,
           intent.operation,
           intent.quantity,
-          pendingParsedMessage?.rawText || `Initial stock for ${intent.productName}`,
+          pendingParsedMessage?.rawText || `Initial stock for ${newProd.name}`,
           'text'
         );
         successCount++;
@@ -150,88 +169,90 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
     setPendingParsedMessage(null);
     refreshData();
 
-    // Trigger celebratory confetti
+    // Trigger subtle success celebration
     try {
       confetti({
-        particleCount: 60,
-        spread: 70,
+        particleCount: 40,
+        spread: 50,
         origin: { y: 0.8 },
-        colors: ['#61b487', '#2dd4bf', '#ffffff']
+        colors: ['#18583d', '#61b487', '#0d3d29']
       });
     } catch {
-      // no-op
+      // ignore
     }
 
     setToastNotification({
-      message: `✓ Inventory updated successfully (${successCount} item${successCount === 1 ? '' : 's'}).`,
+      message: `✓ Successfully updated ${successCount} item${successCount === 1 ? '' : 's'} in your shop.`,
       canUndo: true,
     });
-
-    setTimeout(() => {
-      setToastNotification(prev => (prev?.canUndo ? prev : null));
-    }, 8000);
   };
 
-  // Undo Last Transaction
+  // Undo the last transaction
   const handleUndoLast = () => {
-    const res = dbService.undoLastTransaction(user.user_id);
+    const success = dbService.undoLastTransaction(user.user_id);
+    if (success) {
+      refreshData();
+      setToastNotification({ message: '✓ Reverted last inventory change.' });
+    } else {
+      setToastNotification({ message: 'No recent transaction to undo.' });
+    }
+  };
+
+  // Quick direct stock adjustment from table or alerts (+1 or -1)
+  const handleQuickAdjust = (productId: string, delta: number) => {
+    const p = products.find(prod => prod.id === productId);
+    if (!p) return;
+
+    const op = delta > 0 ? 'stock_in' : 'stock_out';
+    const absQty = Math.abs(delta);
+
+    dbService.recordTransaction(
+      user.user_id,
+      productId,
+      op,
+      absQty,
+      `Quick adjustment (${delta > 0 ? '+1' : '-1'}) for ${p.name}`,
+      'text'
+    );
+
     refreshData();
     setToastNotification({
-      message: res.message,
-      canUndo: false,
+      message: `✓ Adjusted ${p.name} (${delta > 0 ? '+1' : '-1'})`,
+      canUndo: true,
     });
   };
 
-  // Quick Restock from Alert
+  // Restock from alert
   const handleQuickRestock = (productId: string, productName: string, qty: number) => {
     dbService.recordTransaction(
       user.user_id,
       productId,
       'stock_in',
       qty,
-      `Restocked ${qty} units via alert recommendation`,
-      'manual'
+      `Restocked ${qty} units of ${productName} from alert`,
+      'text'
     );
     refreshData();
     setToastNotification({
-      message: `✓ Restocked +${qty} units of ${productName}.`,
+      message: `✓ Restocked +${qty} units of ${productName}`,
       canUndo: true,
     });
   };
 
-  // Quick inventory table +1 / -1
-  const handleQuickAdjust = (productId: string, delta: number) => {
-    const prod = products.find(p => p.id === productId);
-    if (!prod) return;
-    const op: NLPOperation = delta > 0 ? 'stock_in' : 'stock_out';
-    dbService.recordTransaction(
-      user.user_id,
-      productId,
-      op,
-      Math.abs(delta),
-      `Manual quick adjustment (${delta > 0 ? '+' : ''}${delta})`,
-      'manual'
-    );
-    refreshData();
-  };
-
-  // Load Demo Shop (Requested feature for judges)
+  // Load standard Demo catalog
   const handleLoadDemoShop = () => {
     dbService.loadDemoShop(user.user_id);
     refreshData();
-    setToastNotification({
-      message: '✓ Demo Shop Loaded: 8 Indian FMCG products, active transactions & low stock alerts configured.',
-      canUndo: false,
-    });
+    setToastNotification({ message: '✓ Kirana demo catalog and active alerts reloaded.' });
   };
 
-  // Export JSON store backup
+  // Export JSON backup
   const handleExportJSON = () => {
     const exportData = {
-      profile: user,
-      products,
-      transactions,
-      alerts,
+      shopkeeper: user,
+      catalog: products,
+      ledger: transactions,
+      activeAlerts: alerts,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -246,27 +267,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
   const unreadAlertsCount = alerts.filter(a => !a.is_read).length;
 
   return (
-    <div className="min-h-screen bg-[#05110b] text-[#f0fdf4] selection:bg-[#61b487] selection:text-[#05110b] flex flex-col">
-      {/* 1. Header Bar */}
-      <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-[#05110b]/90 border-b border-emerald-900/40">
+    <div className="min-h-screen bg-[#F7FAF8] text-[#173127] selection:bg-[#61b487] selection:text-white flex flex-col">
+      {/* 1. Header Bar - Clean White with Subtle Border */}
+      <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/95 border-b border-[#DCE8E0] shadow-[0_1px_3px_rgba(23,49,39,0.03)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
           {/* Brand & Shop Identity */}
           <div className="flex items-center gap-3">
-            <button
+            <SahayakLogo
+              size="sm"
+              showTagline={false}
               onClick={() => onNavigate('/home')}
-              className="flex items-center gap-2 text-xl font-bold tracking-tight text-white hover:text-emerald-400 transition-colors"
-            >
-              <div className="w-8 h-8 rounded-lg bg-[#18583d] border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-bold text-base">
-                S
-              </div>
-              <span className="hidden sm:inline">Sahayak</span>
-            </button>
+            />
 
-            <span className="hidden sm:inline text-emerald-800 font-light">|</span>
+            <span className="hidden sm:inline text-[#DCE8E0] font-light">|</span>
 
-            <div className="flex items-center gap-2">
-              <Store className="w-4 h-4 text-[#61b487] shrink-0" />
-              <span className="text-xs sm:text-sm font-semibold text-emerald-200 truncate max-w-[180px] sm:max-w-xs">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#F0F6F2] border border-[#DCE8E0]">
+              <Store className="w-4 h-4 text-[#18583d] shrink-0" />
+              <span className="text-xs sm:text-sm font-semibold text-[#173127] truncate max-w-[180px] sm:max-w-xs">
                 {user.shop_name}
               </span>
             </div>
@@ -274,33 +291,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
 
           {/* Quick Actions (Demo Load + Language + User Profile + Logout) */}
           <div className="flex items-center gap-2.5">
-            {/* Hackathon Judge 1-Click Setup Button */}
+            {/* Quick Demo Reset Button */}
             <button
               onClick={handleLoadDemoShop}
               title="Loads standard Kirana demo catalog (Maggi, Pepsi, Parle-G, Amul)"
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 hover:text-white hover:border-emerald-400 text-xs font-semibold transition-all cursor-pointer shadow-sm hover:scale-102"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#DCE8E0] hover:border-[#18583d] text-[#173127] hover:text-[#18583d] text-xs font-semibold transition-all cursor-pointer shadow-2xs hover:scale-102"
             >
-              <Sparkles className="w-3.5 h-3.5 text-[#61b487]" />
+              <Sparkles className="w-3.5 h-3.5 text-[#18583d]" />
               <span>Load Demo Shop</span>
             </button>
 
             {/* Language indicator */}
-            <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#081f15] border border-emerald-800/40 text-[11px] text-emerald-400">
-              <Globe className="w-3 h-3" />
+            <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#F0F6F2] border border-[#DCE8E0] text-xs text-[#18583d] font-semibold">
+              <Globe className="w-3.5 h-3.5" />
               <span>{user.preferred_language === 'mr-IN' ? 'मराठी' : user.preferred_language === 'hi-IN' ? 'हिंदी' : 'English'}</span>
             </div>
 
             {/* User Name Pill */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#081f15] border border-emerald-800/40 text-xs text-white">
-              <User className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-medium hidden md:inline">{user.full_name}</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F0F6F2] border border-[#DCE8E0] text-xs text-[#173127]">
+              <User className="w-3.5 h-3.5 text-[#18583d]" />
+              <span className="font-semibold hidden md:inline">{user.full_name}</span>
             </div>
 
             {/* Logout */}
             <button
               onClick={onLogout}
               title="Sign Out"
-              className="p-2 rounded-xl text-emerald-400/80 hover:text-red-400 hover:bg-emerald-950 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-[#607269] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -308,7 +325,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
             {/* Mobile Hamburger Menu */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-emerald-300 hover:text-white"
+              className="md:hidden p-2 text-[#173127] hover:text-[#18583d]"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -318,18 +335,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
 
       {/* Toast Notification Banner with Undo Option */}
       {toastNotification && (
-        <div className="sticky top-18 z-30 bg-[#0d3d29] border-b border-emerald-400/40 px-4 py-2.5 text-xs text-emerald-100 flex items-center justify-between animate-fade-in shadow-md">
+        <div className="sticky top-18 z-30 bg-[#F0F6F2] border-b border-[#DCE8E0] px-4 py-2.5 text-xs text-[#173127] flex items-center justify-between animate-fade-in shadow-xs">
           <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-[#61b487]" />
-              <span className="font-medium">{toastNotification.message}</span>
+              <CheckCircle2 className="w-4 h-4 text-[#18583d]" />
+              <span className="font-semibold">{toastNotification.message}</span>
             </div>
 
             <div className="flex items-center gap-3">
               {toastNotification.canUndo && (
                 <button
                   onClick={handleUndoLast}
-                  className="px-3 py-1 rounded bg-[#61b487] text-[#05110b] font-bold text-xs hover:bg-[#78cca0] transition-colors flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1 rounded-lg bg-[#18583d] text-white font-bold text-xs hover:bg-[#0d3d29] transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>Undo</span>
@@ -337,7 +354,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
               )}
               <button
                 onClick={() => setToastNotification(null)}
-                className="text-emerald-400 hover:text-white"
+                className="text-[#89988F] hover:text-[#173127] cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -352,49 +369,51 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
         <aside className="hidden md:block w-56 shrink-0 space-y-1">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'overview' ? 'bg-[#18583d] text-white shadow-sm' : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/50'}`}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'overview' ? 'bg-[#18583d] text-white shadow-sm' : 'text-[#607269] hover:text-[#173127] hover:bg-[#F0F6F2]'}`}
           >
-            <LayoutDashboard className="w-4 h-4 text-[#61b487]" />
+            <LayoutDashboard className="w-4 h-4" />
             <span>Overview</span>
           </button>
 
           <button
             onClick={() => setActiveTab('inventory')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'inventory' ? 'bg-[#18583d] text-white shadow-sm' : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/50'}`}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'inventory' ? 'bg-[#18583d] text-white shadow-sm' : 'text-[#607269] hover:text-[#173127] hover:bg-[#F0F6F2]'}`}
           >
             <div className="flex items-center gap-2.5">
-              <Package className="w-4 h-4 text-[#61b487]" />
+              <Package className="w-4 h-4" />
               <span>Inventory</span>
             </div>
-            <span className="font-mono text-[11px] text-emerald-400/80">{products.length}</span>
+            <span className={`font-mono text-[11px] ${activeTab === 'inventory' ? 'text-white' : 'text-[#89988F]'}`}>
+              {products.length}
+            </span>
           </button>
 
           <button
             onClick={() => setActiveTab('transactions')}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'transactions' ? 'bg-[#18583d] text-white shadow-sm' : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/50'}`}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'transactions' ? 'bg-[#18583d] text-white shadow-sm' : 'text-[#607269] hover:text-[#173127] hover:bg-[#F0F6F2]'}`}
           >
-            <History className="w-4 h-4 text-[#61b487]" />
+            <History className="w-4 h-4" />
             <span>Transactions</span>
           </button>
 
           <button
             onClick={() => setActiveTab('assistant')}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'assistant' ? 'bg-[#18583d] text-white shadow-sm' : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/50'}`}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'assistant' ? 'bg-[#18583d] text-white shadow-sm' : 'text-[#607269] hover:text-[#173127] hover:bg-[#F0F6F2]'}`}
           >
-            <Sparkles className="w-4 h-4 text-[#61b487]" />
+            <Sparkles className="w-4 h-4" />
             <span>AI Assistant</span>
           </button>
 
           <button
             onClick={() => setActiveTab('alerts')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'alerts' ? 'bg-[#18583d] text-white shadow-sm' : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/50'}`}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'alerts' ? 'bg-[#18583d] text-white shadow-sm' : 'text-[#607269] hover:text-[#173127] hover:bg-[#F0F6F2]'}`}
           >
             <div className="flex items-center gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
+              <AlertTriangle className={`w-4 h-4 ${activeTab === 'alerts' ? 'text-white' : 'text-amber-500'}`} />
               <span>Low Stock Alerts</span>
             </div>
             {unreadAlertsCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-red-950 text-red-300 text-[10px] font-mono">
+              <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-mono font-bold">
                 {unreadAlertsCount}
               </span>
             )}
@@ -402,17 +421,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
 
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'analytics' ? 'bg-[#18583d] text-white shadow-sm' : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/50'}`}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'analytics' ? 'bg-[#18583d] text-white shadow-sm' : 'text-[#607269] hover:text-[#173127] hover:bg-[#F0F6F2]'}`}
           >
-            <BarChart3 className="w-4 h-4 text-[#61b487]" />
+            <BarChart3 className="w-4 h-4" />
             <span>Analytics</span>
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'settings' ? 'bg-[#18583d] text-white shadow-sm' : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/50'}`}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === 'settings' ? 'bg-[#18583d] text-white shadow-sm' : 'text-[#607269] hover:text-[#173127] hover:bg-[#F0F6F2]'}`}
           >
-            <Settings className="w-4 h-4 text-[#61b487]" />
+            <Settings className="w-4 h-4" />
             <span>Settings</span>
           </button>
 
@@ -420,9 +439,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
           <div className="pt-6">
             <button
               onClick={handleLoadDemoShop}
-              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#0d3d29] to-[#072417] border border-emerald-500/30 text-emerald-200 hover:text-white text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full py-2 px-3 rounded-xl bg-[#F0F6F2] hover:bg-[#DCE8E0] border border-[#DCE8E0] text-[#18583d] hover:text-[#0d3d29] text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
             >
-              <Database className="w-3.5 h-3.5 text-[#61b487]" />
+              <Database className="w-3.5 h-3.5 text-[#18583d]" />
               <span>Reset Demo Shop</span>
             </button>
           </div>
@@ -430,43 +449,49 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden w-full bg-[#081f15] border border-emerald-800/40 rounded-2xl p-4 space-y-2 mb-4">
+          <div className="md:hidden w-full bg-white border border-[#DCE8E0] rounded-2xl p-4 space-y-2 mb-4 shadow-md">
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button
                 onClick={() => { setActiveTab('overview'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-medium ${activeTab === 'overview' ? 'bg-[#18583d] text-white' : 'text-emerald-300 bg-emerald-950/40'}`}
+                className={`p-2.5 rounded-xl font-semibold ${activeTab === 'overview' ? 'bg-[#18583d] text-white' : 'text-[#173127] bg-[#F0F6F2]'}`}
               >
                 Overview
               </button>
               <button
                 onClick={() => { setActiveTab('inventory'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-medium ${activeTab === 'inventory' ? 'bg-[#18583d] text-white' : 'text-emerald-300 bg-emerald-950/40'}`}
+                className={`p-2.5 rounded-xl font-semibold ${activeTab === 'inventory' ? 'bg-[#18583d] text-white' : 'text-[#173127] bg-[#F0F6F2]'}`}
               >
                 Inventory ({products.length})
               </button>
               <button
                 onClick={() => { setActiveTab('transactions'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-medium ${activeTab === 'transactions' ? 'bg-[#18583d] text-white' : 'text-emerald-300 bg-emerald-950/40'}`}
+                className={`p-2.5 rounded-xl font-semibold ${activeTab === 'transactions' ? 'bg-[#18583d] text-white' : 'text-[#173127] bg-[#F0F6F2]'}`}
               >
                 Transactions
               </button>
               <button
+                onClick={() => { setActiveTab('assistant'); setMobileMenuOpen(false); }}
+                className={`p-2.5 rounded-xl font-semibold ${activeTab === 'assistant' ? 'bg-[#18583d] text-white' : 'text-[#173127] bg-[#F0F6F2]'}`}
+              >
+                AI Assistant
+              </button>
+              <button
                 onClick={() => { setActiveTab('alerts'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-medium ${activeTab === 'alerts' ? 'bg-[#18583d] text-white' : 'text-emerald-300 bg-emerald-950/40'}`}
+                className={`p-2.5 rounded-xl font-semibold ${activeTab === 'alerts' ? 'bg-[#18583d] text-white' : 'text-[#173127] bg-[#F0F6F2]'}`}
               >
                 Alerts {unreadAlertsCount > 0 && `(${unreadAlertsCount})`}
               </button>
               <button
                 onClick={() => { setActiveTab('analytics'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-medium ${activeTab === 'analytics' ? 'bg-[#18583d] text-white' : 'text-emerald-300 bg-emerald-950/40'}`}
+                className={`p-2.5 rounded-xl font-semibold ${activeTab === 'analytics' ? 'bg-[#18583d] text-white' : 'text-[#173127] bg-[#F0F6F2]'}`}
               >
                 Analytics
               </button>
               <button
                 onClick={() => { handleLoadDemoShop(); setMobileMenuOpen(false); }}
-                className="p-2.5 rounded-xl font-medium bg-[#18583d]/60 text-emerald-200"
+                className="p-2.5 rounded-xl font-semibold bg-[#F0F6F2] text-[#18583d] col-span-2"
               >
-                Load Demo
+                Load Demo Shop
               </button>
             </div>
           </div>
@@ -474,13 +499,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
 
         {/* Content Area */}
         <main className="flex-1 space-y-6">
-          {/* Header Greeting Section (Mandatory from prompt) */}
-          <div className="rounded-3xl glass-panel p-6 border border-emerald-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Header Greeting Section */}
+          <div className="rounded-2xl bg-white p-6 border border-[#DCE8E0] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-[#173127] tracking-tight font-heading">
                 Good morning, {user.full_name.split(' ')[0]}
               </h2>
-              <p className="text-xs sm:text-sm text-emerald-200/75 mt-0.5">
+              <p className="text-xs sm:text-sm text-[#607269] mt-0.5">
                 Here&apos;s what&apos;s happening in your shop today.
               </p>
             </div>
@@ -489,9 +514,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
             {transactions.length > 0 && (
               <button
                 onClick={handleUndoLast}
-                className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-emerald-950/70 border border-emerald-700/40 text-emerald-300 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-102"
+                className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-[#F0F6F2] hover:bg-[#DCE8E0] border border-[#DCE8E0] text-[#173127] hover:text-[#18583d] text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-102"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
+                <RotateCcw className="w-3.5 h-3.5 text-[#18583d]" />
                 <span>Undo Last Update</span>
               </button>
             )}
@@ -508,13 +533,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
           {/* Active Tab View: Overview */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Today's Smart AI Summary (Generated strictly from real transactions) */}
-              <div className="rounded-2xl p-5 bg-gradient-to-r from-[#0d3d29] to-[#072417] border border-emerald-500/30">
-                <div className="flex items-center gap-2 mb-2 text-xs font-bold text-emerald-400">
-                  <Sparkles className="w-4 h-4 text-[#61b487]" />
+              {/* Today's Smart AI Summary */}
+              <div className="rounded-2xl p-5 bg-gradient-to-r from-[#F0F6F2] via-white to-white border border-[#DCE8E0] shadow-sm">
+                <div className="flex items-center gap-2 mb-2 text-xs font-bold text-[#18583d]">
+                  <Sparkles className="w-4 h-4 text-[#18583d]" />
                   <span>Today&apos;s Smart Summary</span>
                 </div>
-                <p className="text-sm text-white font-medium leading-relaxed">
+                <p className="text-sm text-[#173127] font-medium leading-relaxed">
                   {dailySummary}
                 </p>
               </div>
@@ -523,46 +548,46 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div
                   onClick={() => setActiveTab('inventory')}
-                  className="rounded-2xl glass-panel p-4 border border-emerald-500/20 cursor-pointer hover:border-emerald-400/40 transition-all"
+                  className="rounded-2xl bg-white p-4 border border-[#DCE8E0] shadow-sm cursor-pointer hover:border-[#18583d] transition-all"
                 >
-                  <span className="text-xs text-emerald-400/80 font-medium">Total Products</span>
-                  <div className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-white font-mono">
+                  <span className="text-xs text-[#607269] font-medium">Total Products</span>
+                  <div className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-[#173127] font-mono">
                     {stats.totalProducts}
                   </div>
-                  <span className="text-[11px] text-emerald-500 font-mono">Catalog items</span>
+                  <span className="text-[11px] text-[#89988F] font-mono">Catalog items</span>
                 </div>
 
                 <div
                   onClick={() => setActiveTab('transactions')}
-                  className="rounded-2xl glass-panel p-4 border border-emerald-500/20 cursor-pointer hover:border-emerald-400/40 transition-all"
+                  className="rounded-2xl bg-white p-4 border border-[#DCE8E0] shadow-sm cursor-pointer hover:border-[#18583d] transition-all"
                 >
-                  <span className="text-xs text-emerald-400/80 font-medium">Stock Added Today</span>
-                  <div className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-[#61b487] font-mono">
+                  <span className="text-xs text-[#607269] font-medium">Stock Added Today</span>
+                  <div className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-[#18583d] font-mono">
                     +{stats.stockAddedToday}
                   </div>
-                  <span className="text-[11px] text-emerald-400 font-mono">Restocked units</span>
+                  <span className="text-[11px] text-[#89988F] font-mono">Restocked units</span>
                 </div>
 
                 <div
                   onClick={() => setActiveTab('transactions')}
-                  className="rounded-2xl glass-panel p-4 border border-emerald-500/20 cursor-pointer hover:border-emerald-400/40 transition-all"
+                  className="rounded-2xl bg-white p-4 border border-[#DCE8E0] shadow-sm cursor-pointer hover:border-[#18583d] transition-all"
                 >
-                  <span className="text-xs text-emerald-400/80 font-medium">Stock Sold Today</span>
-                  <div className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-red-400 font-mono">
+                  <span className="text-xs text-red-600 font-medium">Stock Sold Today</span>
+                  <div className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-red-600 font-mono">
                     -{stats.stockSoldToday}
                   </div>
-                  <span className="text-[11px] text-red-400/80 font-mono">Customer sales</span>
+                  <span className="text-[11px] text-red-600/80 font-mono">Customer sales</span>
                 </div>
 
                 <div
                   onClick={() => setActiveTab('alerts')}
-                  className="rounded-2xl glass-panel p-4 border border-emerald-500/20 cursor-pointer hover:border-emerald-400/40 transition-all"
+                  className="rounded-2xl bg-white p-4 border border-[#DCE8E0] shadow-sm cursor-pointer hover:border-amber-400 transition-all"
                 >
-                  <span className="text-xs text-amber-300 font-medium">Low Stock Alerts</span>
-                  <div className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-amber-300 font-mono">
+                  <span className="text-xs text-amber-700 font-medium">Low Stock Alerts</span>
+                  <div className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-amber-600 font-mono">
                     {stats.lowStockCount}
                   </div>
-                  <span className="text-[11px] text-amber-400/80 font-mono">Needs reordering</span>
+                  <span className="text-[11px] text-amber-700 font-mono">Needs reordering</span>
                 </div>
               </div>
 
@@ -572,15 +597,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
               {/* Quick Preview of Recent Transactions & Alerts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Recent Movement */}
-                <div className="rounded-3xl glass-panel p-6 border border-emerald-500/20">
+                <div className="rounded-2xl bg-white p-6 border border-[#DCE8E0] shadow-sm">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <History className="w-4 h-4 text-[#61b487]" />
+                    <h3 className="text-sm font-bold text-[#173127] flex items-center gap-2 font-heading">
+                      <History className="w-4 h-4 text-[#18583d]" />
                       <span>Recent Inventory Activity</span>
                     </h3>
                     <button
                       onClick={() => setActiveTab('transactions')}
-                      className="text-xs text-emerald-400 hover:text-white font-medium"
+                      className="text-xs text-[#18583d] hover:underline font-semibold cursor-pointer"
                     >
                       View all ({transactions.length})
                     </button>
@@ -589,17 +614,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                   {transactions.slice(0, 4).map((t) => (
                     <div
                       key={t.id}
-                      className="py-2.5 border-b border-emerald-900/30 flex items-center justify-between text-xs last:border-0"
+                      className="py-2.5 border-b border-[#DCE8E0] flex items-center justify-between text-xs last:border-0"
                     >
                       <div>
-                        <div className="font-semibold text-white">{t.product_name}</div>
-                        <div className="text-[11px] text-emerald-400/70 italic">&ldquo;{t.source_message}&rdquo;</div>
+                        <div className="font-semibold text-[#173127]">{t.product_name}</div>
+                        <div className="text-[11px] text-[#607269] italic">&ldquo;{t.source_message}&rdquo;</div>
                       </div>
                       <div className="text-right">
-                        <span className={`font-mono font-bold ${t.type === 'stock_in' ? 'text-[#61b487]' : t.type === 'undo' ? 'text-amber-400' : 'text-red-400'}`}>
+                        <span className={`font-mono font-bold ${t.type === 'stock_in' ? 'text-[#18583d]' : t.type === 'undo' ? 'text-amber-600' : 'text-red-600'}`}>
                           {t.type === 'stock_in' ? `+${t.quantity}` : `-${t.quantity}`}
                         </span>
-                        <div className="text-[10px] text-emerald-500 font-mono">
+                        <div className="text-[10px] text-[#89988F] font-mono">
                           {new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </div>
@@ -608,22 +633,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                 </div>
 
                 {/* Critical Stock Buffers */}
-                <div className="rounded-3xl glass-panel p-6 border border-emerald-500/20">
+                <div className="rounded-2xl bg-white p-6 border border-[#DCE8E0] shadow-sm">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-sm font-bold text-[#173127] flex items-center gap-2 font-heading">
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
                       <span>Products Needing Restock</span>
                     </h3>
                     <button
                       onClick={() => setActiveTab('alerts')}
-                      className="text-xs text-emerald-400 hover:text-white font-medium"
+                      className="text-xs text-[#18583d] hover:underline font-semibold cursor-pointer"
                     >
                       Alerts ({alerts.length})
                     </button>
                   </div>
 
                   {products.filter(p => p.quantity <= p.minimum_stock).length === 0 ? (
-                    <div className="py-8 text-center text-emerald-400/60 text-xs">
+                    <div className="py-8 text-center text-[#607269] text-xs">
                       All products are comfortably stocked.
                     </div>
                   ) : (
@@ -633,17 +658,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
                       .map((p) => (
                         <div
                           key={p.id}
-                          className="py-2.5 border-b border-emerald-900/30 flex items-center justify-between text-xs last:border-0"
+                          className="py-2.5 border-b border-[#DCE8E0] flex items-center justify-between text-xs last:border-0"
                         >
                           <div>
-                            <div className="font-semibold text-white">{p.name}</div>
-                            <div className="text-[11px] text-amber-400/80">
+                            <div className="font-semibold text-[#173127]">{p.name}</div>
+                            <div className="text-[11px] text-amber-700">
                               Current: {p.quantity} {p.unit} (Min: {p.minimum_stock})
                             </div>
                           </div>
                           <button
                             onClick={() => handleQuickRestock(p.id, p.name, 10)}
-                            className="px-2.5 py-1 rounded bg-[#61b487] text-[#05110b] font-bold text-[11px] hover:bg-[#78cca0]"
+                            className="px-2.5 py-1 rounded-lg bg-[#18583d] text-white font-bold text-[11px] hover:bg-[#0d3d29] cursor-pointer"
                           >
                             +10 Units
                           </button>
@@ -659,6 +684,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
           {activeTab === 'inventory' && (
             <InventoryTable
               products={products}
+              shopName={user.shop_name}
               onAddProduct={(newProd) => {
                 dbService.addProduct(user.user_id, newProd);
                 refreshData();
@@ -677,6 +703,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
               onQuickAdjust={handleQuickAdjust}
               prefillNewProduct={prefillNewProduct}
               onClearPrefill={() => setPrefillNewProduct(null)}
+              onExportSuccess={(filename) => {
+                setToastNotification({ message: `✓ Downloaded inventory records: ${filename}` });
+              }}
             />
           )}
 
@@ -684,7 +713,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
           {activeTab === 'transactions' && (
             <TransactionsList
               transactions={transactions}
+              shopName={user.shop_name}
               onUndoLast={handleUndoLast}
+              onExportSuccess={(filename) => {
+                setToastNotification({ message: `✓ Downloaded transaction ledger: ${filename}` });
+              }}
+            />
+          )}
+
+          {/* Active Tab View: AI Assistant Details & Log */}
+          {activeTab === 'assistant' && (
+            <AssistantTabContent
+              messages={messages}
+              products={products}
+              onSelectPhrase={(phrase) => handleProcessNLPInput(phrase, 'text')}
             />
           )}
 
@@ -715,59 +757,59 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
 
           {/* Active Tab View: Settings */}
           {activeTab === 'settings' && (
-            <div className="max-w-2xl rounded-3xl glass-panel p-6 sm:p-8 border border-emerald-500/25 space-y-6">
-              <h3 className="text-lg font-bold text-white">Shop &amp; Account Settings</h3>
+            <div className="max-w-2xl rounded-2xl bg-white p-6 sm:p-8 border border-[#DCE8E0] shadow-sm space-y-6">
+              <h3 className="text-lg font-bold text-[#173127] font-heading">Shop &amp; Account Settings</h3>
 
               <div className="space-y-4 text-xs">
                 <div>
-                  <label className="block text-emerald-300 font-semibold mb-1">Shopkeeper Full Name</label>
+                  <label className="block text-[#173127] font-semibold mb-1">Shopkeeper Full Name</label>
                   <input
                     type="text"
                     disabled
                     value={user.full_name}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-800 text-white"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-emerald-300 font-semibold mb-1">Store / Kirana Name</label>
+                  <label className="block text-[#173127] font-semibold mb-1">Store / Kirana Name</label>
                   <input
                     type="text"
                     disabled
                     value={user.shop_name}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-800 text-white"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-emerald-300 font-semibold mb-1">Registered Email</label>
+                  <label className="block text-[#173127] font-semibold mb-1">Registered Email</label>
                   <input
                     type="text"
                     disabled
                     value={user.email}
-                    className="w-full px-3 py-2 rounded-xl bg-[#061810] border border-emerald-800 text-white"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] text-[#173127]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-emerald-300 font-semibold mb-1">Language Mode</label>
-                  <div className="p-3 rounded-xl bg-[#061810] border border-emerald-800 text-emerald-200">
+                  <label className="block text-[#173127] font-semibold mb-1">Language Mode</label>
+                  <div className="p-3 rounded-xl bg-[#F0F6F2] border border-[#DCE8E0] text-[#18583d] font-semibold">
                     {user.preferred_language === 'mr-IN' ? 'मराठी (Marathi Voice & NLP)' : user.preferred_language === 'hi-IN' ? 'हिंदी / Hinglish (Hindi Voice & NLP)' : 'English (Retail)'}
                   </div>
                 </div>
               </div>
 
               {/* Data Export Backup */}
-              <div className="pt-4 border-t border-emerald-800/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="pt-4 border-t border-[#DCE8E0] flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-sm font-semibold text-white">Export Shop Backup</h4>
-                  <p className="text-xs text-emerald-300/70">
+                  <h4 className="text-sm font-semibold text-[#173127]">Export Shop Backup</h4>
+                  <p className="text-xs text-[#607269]">
                     Download full product catalog, transaction ledger, and alerts in standard JSON format.
                   </p>
                 </div>
                 <button
                   onClick={handleExportJSON}
-                  className="px-4 py-2 rounded-xl bg-[#18583d] hover:bg-[#206f4e] text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-[#18583d] hover:bg-[#0d3d29] text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Download Backup</span>
@@ -775,16 +817,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate, 
               </div>
 
               {/* Reset to Demo Shop */}
-              <div className="pt-4 border-t border-emerald-800/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="pt-4 border-t border-[#DCE8E0] flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-sm font-semibold text-amber-300">Reset Demo Shop Data</h4>
-                  <p className="text-xs text-emerald-300/70">
+                  <h4 className="text-sm font-semibold text-amber-800">Reset Demo Shop Data</h4>
+                  <p className="text-xs text-[#607269]">
                     Reloads fresh demo Kirana inventory with Maggi, Pepsi, Parle-G, and alerts.
                   </p>
                 </div>
                 <button
                   onClick={handleLoadDemoShop}
-                  className="px-4 py-2 rounded-xl bg-amber-950/80 border border-amber-600/50 hover:bg-amber-900 text-amber-200 text-xs font-semibold cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-semibold cursor-pointer shadow-2xs"
                 >
                   Reset Demo Data
                 </button>

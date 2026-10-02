@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Minus, Sparkles, AlertCircle, ArrowUpRight, ArrowDownRight, Compass } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Sparkles, Compass } from 'lucide-react';
 import { InventoryTransaction } from '../../types';
 import { calculatePredictedSalesTrend, TrendForecastResult } from '../../services/trendForecasting';
 
@@ -38,24 +38,21 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
   const isDown = forecast.direction === 'down';
 
   return (
-    <div className="rounded-3xl glass-panel p-6 sm:p-7 border border-emerald-500/30 shadow-2xl relative overflow-hidden bg-gradient-to-br from-[#0a2318] via-[#071d14] to-[#05110b]">
-      {/* Background radial glow */}
-      <div className="absolute top-0 right-1/4 w-64 h-64 bg-[#18583d]/25 rounded-full blur-[80px] pointer-events-none" />
-
+    <div className="rounded-2xl bg-white p-6 sm:p-7 border border-[#DCE8E0] shadow-sm relative overflow-hidden text-[#173127]">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#18583d] border border-emerald-400/40 flex items-center justify-center text-[#61b487]">
-            <Sparkles className="w-4 h-4" />
+          <div className="w-8 h-8 rounded-xl bg-[#F0F6F2] border border-[#DCE8E0] flex items-center justify-center text-[#18583d]">
+            <Sparkles className="w-4 h-4 text-[#18583d]" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+            <h3 className="text-base font-bold text-[#173127] tracking-tight flex items-center gap-2 font-heading">
               <span>Predicted Sales Trend</span>
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700/50 text-emerald-400">
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#F0F6F2] border border-[#DCE8E0] text-[#18583d] font-semibold">
                 Linear Regression
               </span>
             </h3>
-            <p className="text-xs text-emerald-200/70">
+            <p className="text-xs text-[#607269]">
               Ordinary Least Squares (OLS) model trained on your rolling 7-day sales records
             </p>
           </div>
@@ -64,18 +61,18 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
         {/* Trend Indicator Badge */}
         <div className="flex items-center gap-1.5 self-start sm:self-auto">
           {isUp ? (
-            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-950 border border-emerald-400/40 text-emerald-300 text-xs font-semibold">
-              <TrendingUp className="w-3.5 h-3.5 text-[#61b487]" />
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#EBF6F0] border border-[#DCE8E0] text-[#18583d] text-xs font-semibold">
+              <TrendingUp className="w-3.5 h-3.5 text-[#18583d]" />
               <span>+{forecast.percentageChange}% Expected Growth</span>
             </div>
           ) : isDown ? (
-            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-red-950/80 border border-red-500/40 text-red-300 text-xs font-semibold">
-              <TrendingDown className="w-3.5 h-3.5 text-red-400" />
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
+              <TrendingDown className="w-3.5 h-3.5 text-red-600" />
               <span>{forecast.percentageChange}% Expected Dip</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#081f15] border border-emerald-700/40 text-emerald-200 text-xs font-semibold">
-              <Minus className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#F0F6F2] border border-[#DCE8E0] text-[#173127] text-xs font-semibold">
+              <Minus className="w-3.5 h-3.5 text-[#607269]" />
               <span>Steady Demand (~{forecast.averageDailySales} units/day)</span>
             </div>
           )}
@@ -86,38 +83,38 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
         {/* Left Column: Big Forecast Number */}
         <div className="lg:col-span-5 space-y-2">
-          <span className="text-xs uppercase font-medium tracking-wider text-emerald-400/80 block">
+          <span className="text-xs uppercase font-medium tracking-wider text-[#607269] block">
             Tomorrow&apos;s Projected Demand
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl sm:text-5xl font-extrabold text-white font-mono tracking-tight">
+            <span className="text-4xl sm:text-5xl font-extrabold text-[#173127] font-mono tracking-tight">
               ~{forecast.predictedTomorrow}
             </span>
-            <span className="text-sm font-semibold text-emerald-300">units</span>
+            <span className="text-sm font-semibold text-[#18583d]">units</span>
           </div>
 
           {/* Micro Stats Line */}
-          <div className="pt-1 flex items-center gap-2 text-xs text-emerald-400/80">
+          <div className="pt-1 flex items-center gap-2 text-xs text-[#607269]">
             <span>Velocity:</span>
-            <strong className={`font-mono ${forecast.slope >= 0 ? 'text-[#61b487]' : 'text-red-400'}`}>
+            <strong className={`font-mono ${forecast.slope >= 0 ? 'text-[#18583d]' : 'text-red-600'}`}>
               {forecast.slope >= 0 ? `+${forecast.slope}` : forecast.slope} units/day
             </strong>
             <span aria-hidden="true">·</span>
             <span>Fit (R²):</span>
-            <strong className="font-mono text-emerald-200">{forecast.rSquared}</strong>
+            <strong className="font-mono text-[#173127]">{forecast.rSquared}</strong>
           </div>
         </div>
 
         {/* Right Column: Regression Trend Visualization */}
-        <div className="lg:col-span-7 rounded-2xl bg-[#05110b]/80 border border-emerald-800/40 p-3.5">
-          <div className="flex items-center justify-between text-[11px] text-emerald-400/80 mb-1 px-1">
+        <div className="lg:col-span-7 rounded-xl bg-[#F7FAF8] border border-[#DCE8E0] p-3.5 shadow-2xs">
+          <div className="flex items-center justify-between text-[11px] text-[#607269] mb-1 px-1">
             <span className="font-mono">Past 7 Days ➔ Tomorrow Forecast</span>
             <span className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-sm bg-[#61b487]" /> Actual
+                <span className="w-2 h-2 rounded-sm bg-[#18583d]" /> Actual
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="w-3 h-0.5 bg-[#2dd4bf]" /> Regression Fit
+                <span className="w-3 h-0.5 bg-[#61b487]" /> Regression Fit
               </span>
             </span>
           </div>
@@ -126,6 +123,8 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
           <div className="w-full overflow-hidden">
             <svg
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              role="img"
+              aria-label={`7-day sales regression chart: predicted demand tomorrow is ~${forecast.predictedTomorrow} units with ${forecast.slope >= 0 ? '+' : ''}${forecast.slope} units per day velocity`}
               className="w-full h-24 overflow-visible"
             >
               {/* Subtle Horizontal grid lines */}
@@ -134,7 +133,7 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
                 y1={paddingY}
                 x2={chartWidth - paddingX}
                 y2={paddingY}
-                stroke="rgba(97, 180, 135, 0.15)"
+                stroke="#DCE8E0"
                 strokeDasharray="3 3"
               />
               <line
@@ -142,7 +141,7 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
                 y1={getY(maxSale * 0.5)}
                 x2={chartWidth - paddingX}
                 y2={getY(maxSale * 0.5)}
-                stroke="rgba(97, 180, 135, 0.12)"
+                stroke="#DCE8E0"
                 strokeDasharray="3 3"
               />
 
@@ -162,15 +161,16 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
                       width={12}
                       height={barH}
                       rx={3}
-                      fill={isToday ? '#61b487' : 'rgba(97, 180, 135, 0.35)'}
+                      fill={isToday ? '#18583d' : '#DCE8E0'}
                     />
                     {/* Data label on bar top */}
                     <text
                       x={x}
                       y={Math.max(12, y - 4)}
-                      fill="#e2e8f0"
+                      fill="#173127"
                       fontSize="9"
                       fontFamily="monospace"
+                      fontWeight="bold"
                       textAnchor="middle"
                     >
                       {p.actualSales}
@@ -179,7 +179,7 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
                     <text
                       x={x}
                       y={chartHeight - 2}
-                      fill={isToday ? '#61b487' : '#94a3b8'}
+                      fill={isToday ? '#18583d' : '#89988F'}
                       fontSize="9"
                       fontWeight={isToday ? 'bold' : 'normal'}
                       textAnchor="middle"
@@ -196,7 +196,7 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
                 y1={trendStartY}
                 x2={getX(6)}
                 y2={getY(forecast.slope * 6 + forecast.intercept)}
-                stroke="#2dd4bf"
+                stroke="#18583d"
                 strokeWidth={2}
               />
 
@@ -206,7 +206,7 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
                 y1={getY(forecast.slope * 6 + forecast.intercept)}
                 x2={getX(7)}
                 y2={trendEndY}
-                stroke="#2dd4bf"
+                stroke="#61b487"
                 strokeWidth={2}
                 strokeDasharray="4 3"
               />
@@ -216,14 +216,14 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
                 cx={getX(7)}
                 cy={trendEndY}
                 r={5}
-                fill="#2dd4bf"
-                stroke="#05110b"
+                fill="#18583d"
+                stroke="#61b487"
                 strokeWidth={2}
               />
               <text
                 x={getX(7)}
                 y={Math.max(12, trendEndY - 6)}
-                fill="#2dd4bf"
+                fill="#18583d"
                 fontSize="10"
                 fontFamily="monospace"
                 fontWeight="bold"
@@ -234,7 +234,7 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
               <text
                 x={getX(7)}
                 y={chartHeight - 2}
-                fill="#2dd4bf"
+                fill="#18583d"
                 fontSize="9"
                 fontWeight="bold"
                 textAnchor="middle"
@@ -247,19 +247,19 @@ export const PredictedSalesTrendCard: React.FC<PredictedSalesTrendCardProps> = (
       </div>
 
       {/* Bottom Kirana Actionable Recommendation */}
-      <div className="mt-5 pt-4 border-t border-emerald-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-start gap-2 max-w-2xl text-emerald-100/90">
-          <Compass className="w-4 h-4 text-[#61b487] shrink-0 mt-0.5" />
+      <div className="mt-5 pt-4 border-t border-[#DCE8E0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-start gap-2 max-w-2xl text-[#173127]">
+          <Compass className="w-4 h-4 text-[#18583d] shrink-0 mt-0.5" />
           <div>
-            <span className="font-semibold text-white">Smart Inventory Guidance: </span>
-            <span className="text-emerald-200/80">{forecast.recommendation}</span>
+            <span className="font-semibold text-[#173127]">Smart Inventory Guidance: </span>
+            <span className="text-[#607269]">{forecast.recommendation}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0 text-emerald-400 font-mono text-[11px]">
-          <span>7-Day Total: <strong className="text-white">{forecast.totalPast7Days} units</strong></span>
+        <div className="flex items-center gap-3 shrink-0 text-[#607269] font-mono text-[11px]">
+          <span>7-Day Total: <strong className="text-[#173127]">{forecast.totalPast7Days} units</strong></span>
           <span aria-hidden="true">·</span>
-          <span>Daily Avg: <strong className="text-white">{forecast.averageDailySales}</strong></span>
+          <span>Daily Avg: <strong className="text-[#173127]">{forecast.averageDailySales}</strong></span>
         </div>
       </div>
     </div>
